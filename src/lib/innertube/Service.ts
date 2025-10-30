@@ -1,10 +1,6 @@
 import { InnertubeSupportServer } from './Server';
 import { createPoTokenMinter, type PoTokenMinterResult } from './PoToken';
 import { type Platform } from 'volumio-youtubei.js';
-import {
-  type SpawnedInnertubeSupportServiceCallbacks,
-  spawnInnertubeSupportService
-} from './Spawn';
 
 export type InnertubeSupportServiceStatus =
   | {
@@ -80,12 +76,6 @@ export class InnertubeSupportService {
       clearTimeout(this.#refreshMinterTimer);
     }
     this.#refreshMinterTimer = null;
-  }
-
-  static startInExternalProcess(
-    callbacks: SpawnedInnertubeSupportServiceCallbacks
-  ) {
-    return spawnInnertubeSupportService(callbacks);
   }
 
   async start() {
