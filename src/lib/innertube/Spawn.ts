@@ -18,6 +18,9 @@ export interface SpawnedInnertubeSupportServiceCallbacks {
 
 const runScript = path.resolve(__dirname, '../../scripts/run.js');
 const cwd = path.resolve(__dirname, '../../../');
+const env = {
+  PATH: process.env.PATH
+};
 
 export function spawnInnertubeSupportService(
   callbacks: SpawnedInnertubeSupportServiceCallbacks
@@ -43,7 +46,8 @@ export function spawnInnertubeSupportService(
           runScript
         ],
         {
-          cwd
+          cwd,
+          env
         }
       );
     } else {
@@ -53,7 +57,8 @@ export function spawnInnertubeSupportService(
       onStdOut('Start service with Node');
       runtime = 'node';
       proc = spawn('node', [runScript], {
-        cwd
+        cwd,
+        env
       });
     }
 
