@@ -1,11 +1,6 @@
 import { execSync } from 'child_process';
 import type Innertube from 'volumio-youtubei.js';
-
-export interface Logger {
-  info: (msg: string) => void;
-  warn: (msg: string) => void;
-  error: (msg: string) => void;
-}
+import { type Logger } from '../utils/Logger';
 
 export type DenoInstallStatus =
   | {
@@ -39,12 +34,6 @@ export function isDenoInstalled(): DenoInstallStatus {
     };
   }
   return denoInstalled;
-}
-
-export class DefaultLogger implements Logger {
-  info: (msg: string) => void;
-  warn: (msg: string) => void;
-  error: (msg: string) => void;
 }
 
 export async function getActiveAccountDatasyncIdToken(

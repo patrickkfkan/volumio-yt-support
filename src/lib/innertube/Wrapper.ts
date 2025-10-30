@@ -3,12 +3,9 @@ import {
   type SpawnedInnertubeSupportService,
   spawnInnertubeSupportService
 } from './Spawn';
-import {
-  DefaultLogger,
-  getActiveAccountDatasyncIdToken,
-  type Logger
-} from './Utils';
+import { getActiveAccountDatasyncIdToken } from './Utils';
 import { type EvalFnResult, type PotFnResult } from './Server';
+import { DefaultLogger, type Logger } from '../utils/Logger';
 
 interface POToken {
   params: {
