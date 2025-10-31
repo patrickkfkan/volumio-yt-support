@@ -50,5 +50,9 @@ To obtain PO tokens and decipher stream URLs, Innertube needs to execute code ob
 
 ## Changelog
 
+1.1.0
+- Add `AutoplayManager` (migrated from YouTube2 / YouTube Music plugins)
+- Some cleanup and refactoring
+
 1.0.0
 - Initial release
