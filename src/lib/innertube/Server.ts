@@ -4,11 +4,19 @@ import { type AddressInfo } from 'net';
 import { type Platform } from 'volumio-youtubei.js';
 import { type PoTokenData } from './PoToken';
 
-export type PotFnResult = PoTokenData;
+export type PotFnResult =
+  | ({
+      ok: true;
+    } & PoTokenData)
+  | {
+      ok: false;
+      error: string;
+    };
+
 export type EvalFnResult = ReturnType<typeof Platform.shim.eval>;
 
 export interface InnertubeSupportServerConfig {
-  potFn: (identifier: string) => Promise<PotFnResult>;
+  potFn: (identifier: string) => Promise<PoTokenData>;
   evalFn: typeof Platform.shim.eval;
 }
 
@@ -76,7 +84,19 @@ export class InnertubeSupportServer {
           error: 'Request is missing param "identifier"'
         });
       }
-      res.status(200).json(await this.#config.potFn(identifier as string));
+      try {
+        const poTokenData = await this.#config.potFn(identifier as string);
+        res.status(200).json({
+          ok: true,
+          ...poTokenData
+        } satisfies PotFnResult);
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        res.status(500).json({
+          ok: false,
+          error: message
+        } satisfies PotFnResult);
+      }
     });
 
     app.post('/eval', async (req, res) => {

@@ -131,7 +131,7 @@ export class InnertubeWrapper {
     return this.#sessionPoToken;
   }
 
-  async generatePoToken(identifier: string): Promise<PotFnResult> {
+  async generatePoToken(identifier: string): Promise<PoTokenData> {
     this.#assertReady();
     if (!this.#service || this.#service.status === 'stopped') {
       throw Error('Innertube support service not started');
@@ -140,7 +140,15 @@ export class InnertubeWrapper {
       `http://${this.#service.server.address}:${this.#service.server.port}/pot`
     );
     url.searchParams.set('identifier', identifier);
-    return (await fetch(url)).json();
+    const result = (await (await fetch(url)).json()) as PotFnResult;
+    if (result.ok) {
+      return {
+        poToken: result.poToken,
+        refreshThreshold: result.refreshThreshold,
+        ttl: result.ttl
+      };
+    }
+    throw Error(result.error);
   }
 
   async #eval(
