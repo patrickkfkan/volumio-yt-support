@@ -49,23 +49,23 @@ export class InnertubeSupportService {
     };
   }
 
-  async #getMinter(forceCreate = false) {
-    if (!this.#minterPromise || forceCreate) {
-      this.#minterPromise = this.#createMinter();
+  async #getMinter(params: { challengeResponse: string }) {
+    if (!this.#minterPromise) {
+      this.#minterPromise = this.#createMinter(params);
     }
     return this.#minterPromise;
   }
 
-  async #createMinter() {
+  async #createMinter(params: { challengeResponse: string }) {
     this.#clearRefreshMinterTimer();
-    const minterResult = await createPoTokenMinter();
+    const minterResult = await createPoTokenMinter(params);
     const { ttl, refreshThreshold = 100 } = minterResult;
 
     // Refresh minter earlier than what refreshThreshold suggests,
     // so requests coming in will use the new minter.
     const timeout = ttl - refreshThreshold - 100;
     this.#refreshMinterTimer = setTimeout(() => {
-      this.#minterPromise = this.#createMinter();
+      this.#minterPromise = this.#createMinter(params);
     }, timeout * 1000);
 
     return minterResult;
@@ -78,7 +78,7 @@ export class InnertubeSupportService {
     this.#refreshMinterTimer = null;
   }
 
-  async start() {
+  async start(params: { challengeResponse: string }) {
     if (this.#startPromise) {
       return this.#startPromise;
     }
@@ -89,7 +89,9 @@ export class InnertubeSupportService {
             this.#server = new InnertubeSupportServer({
               potFn: async (identifier) => {
                 const { minter, ttl, refreshThreshold, created } =
-                  await this.#getMinter();
+                  await this.#getMinter({
+                    challengeResponse: params.challengeResponse
+                  });
                 const poToken = await minter.mintAsWebsafeString(identifier);
                 const adjustedTTL = Math.floor(
                   (ttl * 1000 + created - Date.now()) / 1000

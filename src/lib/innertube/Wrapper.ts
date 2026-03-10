@@ -6,19 +6,12 @@ import {
 import { getActiveAccountDatasyncIdToken } from './Utils';
 import { type EvalFnResult, type PotFnResult } from './Server';
 import { DefaultLogger, type Logger } from '../utils/Logger';
+import { type PoTokenData } from './PoToken';
 
-interface POToken {
-  params: {
-    visitorData?: string;
-    identifier: {
-      type: 'visitorData' | 'datasyncIdToken';
-      value: string;
-      pageId?: string;
-    };
-  };
+interface SessionIdentifier {
+  type: 'visitorData' | 'datasyncIdToken';
   value: string;
-  ttl?: number;
-  refreshThreshold?: number;
+  pageId?: string;
 }
 
 export type AccountConfig =
@@ -35,16 +28,18 @@ export interface Locale {
   language?: string;
 }
 
+const PLAYER_ID = 'a944b11f';
+
 export class InnertubeWrapper {
   #account?: AccountConfig = undefined;
   #locale: Locale = {};
-  #innertubePromise: Promise<Innertube> | null = null;
   #service: SpawnedInnertubeSupportService | null = null;
-  #innertube: Innertube | null = null;
-  #lastSessionPoToken: POToken | null = null;
+  #sessionIdentifer: SessionIdentifier | null = null;
+  #sessionPoToken: Promise<PoTokenData | null> | null = null;
   #poTokenRefreshTimer: NodeJS.Timeout | null = null;
   #logger: Logger;
   #disposed = false;
+  protected innertube: Innertube | null = null;
 
   static async create(params?: {
     account?: AccountConfig;
@@ -54,33 +49,85 @@ export class InnertubeWrapper {
     const instance = new InnertubeWrapper();
     instance.#account = params?.account;
     instance.#locale = params?.locale || {};
-    const logger = (instance.#logger = params?.logger || new DefaultLogger());
-    const service = (instance.#service = await spawnInnertubeSupportService({
-      onStdOut: (data) => {
-        logger.info(`Innertube support service: ${data.toString()}`);
-      },
-      onStdErr: (data) => {
-        logger.error(`Innertube support service: ${data.toString()}`);
-      },
-      onStop: () => {
-        logger.info(`Innertube support service: Stopped`);
-        instance.#service = null;
-      }
+    instance.#logger = params?.logger || new DefaultLogger();
+    await instance.#init();
+    return instance;
+  }
+
+  async #init() {
+    // 1. Create Innertube instance
+    const innertube = (this.innertube = await Innertube.create({
+      cookie: this.#account?.cookie,
+      player_id: PLAYER_ID
     }));
+    this.#applyLocale();
+
+    // 2. Get attestationChallenge (for bgutils) and spawn server with it
+    const challengeResponse = await innertube.getAttestationChallenge(
+      'ENGAGEMENT_TYPE_UNBOUND'
+    );
+    const service = (this.#service = await spawnInnertubeSupportService(
+      challengeResponse,
+      {
+        onStdOut: (data) => {
+          this.#logger.info(`Innertube support service: ${data.toString()}`);
+        },
+        onStdErr: (data) => {
+          this.#logger.error(`Innertube support service: ${data.toString()}`);
+        },
+        onStop: () => {
+          this.#logger.info(`Innertube support service: Stopped`);
+          this.#service = null;
+        }
+      }
+    ));
     if (service.status === 'started') {
-      logger.info(
+      this.#logger.info(
         `Innertube support service running at http://${service.server.address}:${service.server.port}`
       );
     } else {
       throw Error(`Failed to start Innertube support service`);
     }
-    Platform.shim.eval = (data, env) => instance.#eval(data, env);
-    await instance.#initInnertubePromise();
-    return instance;
+    Platform.shim.eval = (data, env) => this.#eval(data, env);
+
+    // 3. Generate session PO token
+    this.#sessionIdentifer = await this.#getSessionIdentifier(innertube);
+    await this.getSessionPoToken();
+  }
+
+  getSessionPoToken() {
+    return this.#doGetSessionPoToken();
+  }
+
+  async #doGetSessionPoToken(isRefresh = false): Promise<PoTokenData | null> {
+    if (!this.#sessionPoToken || isRefresh) {
+      this.#clearPoTokenRefreshTimer();
+      if (isRefresh) {
+        this.#logger.info('Refresh session PO token');
+      }
+      this.#sessionPoToken = this.#generateSessionPoToken();
+      const pot = await this.#sessionPoToken;
+      if (pot) {
+        const { ttl, refreshThreshold = 100 } = pot;
+        if (ttl) {
+          let timeout = ttl - refreshThreshold;
+          if (timeout < 0) {
+            timeout = 120;
+          }
+          this.#logger.info(
+            `Going to refresh session PO token in ${timeout} seconds`
+          );
+          this.#poTokenRefreshTimer = setTimeout(() => {
+            this.#sessionPoToken = this.#doGetSessionPoToken(true);
+          }, timeout * 1000);
+        }
+      }
+    }
+    return this.#sessionPoToken;
   }
 
   async generatePoToken(identifier: string): Promise<PotFnResult> {
-    this.#checkDisposed();
+    this.#assertReady();
     if (!this.#service || this.#service.status === 'stopped') {
       throw Error('Innertube support service not started');
     }
@@ -94,7 +141,7 @@ export class InnertubeWrapper {
   async #eval(
     ...args: Parameters<typeof Platform.shim.eval>
   ): Promise<EvalFnResult> {
-    this.#checkDisposed();
+    this.#assertReady();
     if (!this.#service || this.#service.status === 'stopped') {
       throw Error('Innertube support service not started');
     }
@@ -113,38 +160,42 @@ export class InnertubeWrapper {
     return await res.json();
   }
 
-  async #generateSessionPoToken() {
-    let identifier: POToken['params']['identifier'] | null = null;
-    let visitorData;
-    if (this.#lastSessionPoToken) {
-      identifier = this.#lastSessionPoToken.params.identifier;
-      visitorData = this.#lastSessionPoToken.params.visitorData;
-    } else {
-      const innertube =
-        this.#innertube ||
-        (await Innertube.create({
-          cookie: this.#account?.cookie
-        }));
-      visitorData = innertube.session.context.client.visitorData;
-      if (this.#account?.cookie) {
-        const datasyncIdTokenResult = await getActiveAccountDatasyncIdToken(
-          innertube,
-          this.#logger,
-          this.#account?.activeChannelHandle
-        );
-        if (datasyncIdTokenResult.hasActiveAccount) {
-          const { datasyncIdToken, pageId } = datasyncIdTokenResult;
-          if (datasyncIdToken) {
-            identifier = {
-              type: 'datasyncIdToken',
-              value: datasyncIdToken,
-              pageId
-            };
-          } else {
-            this.#logger.warn(
-              'Signed in but could not get datasyncIdToken for fetching session PO token - will use visitorData instead'
-            );
-          }
+  async #generateSessionPoToken(): Promise<PoTokenData | null> {
+    const identifier = this.#sessionIdentifer;
+    if (identifier) {
+      const poTokenResult = await this.generatePoToken(identifier.value);
+      this.#logger.info(
+        `Obtained session PO token using ${identifier.type} (expires in ${poTokenResult.ttl} seconds)`
+      );
+      return poTokenResult;
+    }
+    this.#logger.warn('No session PO token: SessionIdentifier unavailable');
+    return null;
+  }
+
+  async #getSessionIdentifier(
+    innertube: Innertube
+  ): Promise<SessionIdentifier | null> {
+    const visitorData = innertube.session.context.client.visitorData;
+    let identifier: SessionIdentifier | null = null;
+    if (this.#account?.cookie) {
+      const datasyncIdTokenResult = await getActiveAccountDatasyncIdToken(
+        innertube,
+        this.#logger,
+        this.#account?.activeChannelHandle
+      );
+      if (datasyncIdTokenResult.hasActiveAccount) {
+        const { datasyncIdToken, pageId } = datasyncIdTokenResult;
+        if (datasyncIdToken) {
+          identifier = {
+            type: 'datasyncIdToken',
+            value: datasyncIdToken,
+            pageId
+          };
+        } else {
+          this.#logger.warn(
+            'SessionIdentifier: signed in but could not get datasyncIdToken - will return visitorData instead'
+          );
         }
       }
     }
@@ -154,82 +205,18 @@ export class InnertubeWrapper {
         value: visitorData
       };
     }
-    if (identifier) {
-      const poTokenResult = await this.generatePoToken(identifier.value);
-      this.#logger.info(
-        `Obtained session PO token using ${identifier.type} (expires in ${poTokenResult.ttl} seconds)`
-      );
-      return {
-        params: {
-          visitorData,
-          identifier
-        },
-        value: poTokenResult.poToken,
-        ttl: poTokenResult.ttl,
-        refreshThreshold: poTokenResult.refreshThreshold
-      };
+    if (!identifier) {
+      this.#logger.warn('SessionIdentifier: none found');
+      return null;
     }
-    return null;
+    return identifier;
   }
 
   getInnertube() {
-    this.#checkDisposed();
-    return this.#initInnertubePromise();
-  }
-
-  #initInnertubePromise() {
-    if (!this.#innertubePromise) {
-      this.#innertubePromise = this.#initInnertube();
+    if (this.#assertReady()) {
+      return this.innertube;
     }
-    return this.#innertubePromise;
-  }
-
-  async #initInnertube() {
-    this.#clearPoTokenRefreshTimer();
-    const sessionPot = await this.#generateSessionPoToken();
-    this.#lastSessionPoToken = sessionPot;
-    if (!sessionPot) {
-      this.#innertube =
-        this.#innertube ||
-        (await Innertube.create({
-          cookie: this.#account?.cookie
-        }));
-      this.#applyLocale();
-      this.#logger.warn(
-        'PO token was not used to create Innertube instance. Playback of YouTube content might fail.'
-      );
-      return this.#innertube;
-    }
-    this.#innertube = await Innertube.create({
-      cookie: this.#account?.cookie,
-      visitor_data: sessionPot.params.visitorData,
-      on_behalf_of_user: sessionPot.params.identifier.pageId,
-      po_token: sessionPot.value
-    });
-    this.#applyLocale();
-    if (sessionPot) {
-      const { ttl, refreshThreshold = 100 } = sessionPot;
-      if (ttl) {
-        let timeout = ttl - refreshThreshold;
-        if (timeout < 0) {
-          timeout = 120;
-        }
-        this.#logger.info(
-          `Going to refresh session PO token in ${timeout} seconds`
-        );
-        this.#poTokenRefreshTimer = setTimeout(
-          () => this.#refreshSessionPoToken(),
-          timeout * 1000
-        );
-      }
-    }
-    return this.#innertube;
-  }
-
-  #refreshSessionPoToken() {
-    this.#clearPoTokenRefreshTimer();
-    this.#logger.info('Refresh session PO token');
-    this.#innertubePromise = this.#initInnertube();
+    return undefined as never;
   }
 
   async dispose() {
@@ -238,9 +225,9 @@ export class InnertubeWrapper {
     }
     this.#clearPoTokenRefreshTimer();
     this.#disposed = true;
-    this.#innertubePromise = null;
-    this.#lastSessionPoToken = null;
-    this.#innertube = null;
+    this.#sessionIdentifer = null;
+    this.#sessionPoToken = null;
+    this.innertube = null;
     if (this.#service) {
       await this.#service.stop();
       this.#service = null;
@@ -255,28 +242,33 @@ export class InnertubeWrapper {
   }
 
   #applyLocale() {
-    this.#checkDisposed();
-    if (!this.#innertube) {
+    if (!this.innertube) {
       return;
     }
     if (this.#locale.region) {
-      this.#innertube.session.context.client.gl = this.#locale.region;
+      this.innertube.session.context.client.gl = this.#locale.region;
     }
     if (this.#locale.language) {
-      this.#innertube.session.context.client.hl = this.#locale.language;
+      this.innertube.session.context.client.hl = this.#locale.language;
     }
   }
 
   setLocale(locale: Locale) {
-    this.#checkDisposed();
+    if (!this.innertube) {
+      return;
+    }
     this.#locale = locale;
     this.#applyLocale();
   }
 
-  #checkDisposed() {
+  #assertReady(): this is this & { innertube: Innertube } {
+    if (!this.innertube) {
+      throw Error('Innertube not initialized');
+    }
     if (this.#disposed) {
       throw Error('Innertube instance already disposed');
     }
+    return true;
   }
 
   get serviceRuntime() {

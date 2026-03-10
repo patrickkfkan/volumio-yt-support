@@ -17,7 +17,7 @@ const innertube = await wrapper.getInnertube();
 const contentPot = (await wrapper.generatePoToken(videoId)).poToken;
 const info = await innertube.getBasicInfo(videoId, {
   client: 'YTMUSIC',
-  po_token: contentPot
+  po_token: (await wrapper.getSessionPoToken()).poToken
 });
 
 const audioUrl = await info

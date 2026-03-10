@@ -23,18 +23,27 @@ const wrapper = await InnertubeFactory.getWrappedInstance({
 
 Here's what happens:
 
-1. The wrapper starts a support service in an external process that handles:
+1. The wrapper creates an `Innertube` instance.
+2. It starts a support service in an external process that handles:
    - Minting PO tokens;
    - Evaluating code passed to Innertube's `Platform.shim.eval` method.
-2. It then creates the actual `Innertube` instance with a session-bound PO token obtained from the support service.
+3. It generates a PO token bound to the session of the created `Innertube` instance.
 
-PO tokens have an expiry time. Upon expiry of the token bound to the `Innertube` instance, the wrapper will automatically refresh the instance with a freshly-obtained token.
+PO tokens have an expiry time. The wrapper will automatically refresh the session-bound token created in step (3).
 
 ### Wrapper methods
 
 #### `wrapper.getInnertube()`
 
 Returns the wrapped `Innertube` instance.
+
+#### `wrapper.getSessionPoToken()`
+
+Returns the current PO token bound to the session of the wrapped `Innertube` instance. You would typically use this token in player requests such as `innertube.getBasicInfo()`:
+
+```
+innertube.getBasicInfo(videoId, { po_token: (await wrapper.getSessionPoToken()).poToken });
+```
 
 #### `wrapper.generatePoToken(identifier)`
 

@@ -2,13 +2,9 @@ import express from 'express';
 import { type Server } from 'http';
 import { type AddressInfo } from 'net';
 import { type Platform } from 'volumio-youtubei.js';
+import { type PoTokenData } from './PoToken';
 
-export interface PotFnResult {
-  poToken: string;
-  ttl: number;
-  refreshThreshold: number;
-}
-
+export type PotFnResult = PoTokenData;
 export type EvalFnResult = ReturnType<typeof Platform.shim.eval>;
 
 export interface InnertubeSupportServerConfig {

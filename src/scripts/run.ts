@@ -14,8 +14,14 @@ process.on('SIGTERM', () => {
 });
 
 try {
+  const args: string[] =
+    typeof (globalThis as any).Deno !== 'undefined' ?
+      (globalThis as any).Deno.args
+    : (globalThis as any).process.argv.slice(2);
+  const challengeResponse =
+    args[args.indexOf('--challenge_response') + 1] || '{}';
   void (async () => {
-    const status = await service.start();
+    const status = await service.start({ challengeResponse });
     console.log(`result: ${JSON.stringify(status)}`);
   })();
 } catch (error) {

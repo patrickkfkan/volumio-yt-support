@@ -4,6 +4,7 @@ import readline from 'readline';
 import { type InnertubeSupportServiceStatus } from './Service';
 import path from 'path';
 import kill from 'tree-kill';
+import { type IGetChallengeResponse } from 'volumio-youtubei.js';
 
 export type SpawnedInnertubeSupportService = InnertubeSupportServiceStatus & {
   stop: () => Promise<void>;
@@ -23,6 +24,7 @@ const env = {
 };
 
 export function spawnInnertubeSupportService(
+  challengeResponse: IGetChallengeResponse,
   callbacks: SpawnedInnertubeSupportServiceCallbacks
 ) {
   return new Promise<SpawnedInnertubeSupportService>((resolve, reject) => {
@@ -43,7 +45,9 @@ export function spawnInnertubeSupportService(
           '--allow-read=.',
           '--allow-net',
           '--allow-env',
-          runScript
+          runScript,
+          '--challenge_response',
+          JSON.stringify(challengeResponse)
         ],
         {
           cwd,
@@ -56,10 +60,14 @@ export function spawnInnertubeSupportService(
       );
       onStdOut('Start service with Node');
       runtime = 'node';
-      proc = spawn('node', [runScript], {
-        cwd,
-        env
-      });
+      proc = spawn(
+        'node',
+        [runScript, '--challenge_response', JSON.stringify(challengeResponse)],
+        {
+          cwd,
+          env
+        }
+      );
     }
 
     proc.stdout.on('data', (data) => {
