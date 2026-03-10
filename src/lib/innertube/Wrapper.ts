@@ -42,6 +42,7 @@ export class InnertubeWrapper {
   protected innertube: Innertube | null = null;
 
   static async create(params?: {
+    jsRuntime?: 'node' | 'deno';
     account?: AccountConfig;
     locale?: Locale;
     logger?: Logger;
@@ -50,11 +51,11 @@ export class InnertubeWrapper {
     instance.#account = params?.account;
     instance.#locale = params?.locale || {};
     instance.#logger = params?.logger || new DefaultLogger();
-    await instance.#init();
+    await instance.#init(params);
     return instance;
   }
 
-  async #init() {
+  async #init(params?: { jsRuntime?: 'node' | 'deno' }) {
     // 1. Create Innertube instance
     const innertube = (this.innertube = await Innertube.create({
       cookie: this.#account?.cookie,
@@ -66,9 +67,10 @@ export class InnertubeWrapper {
     const challengeResponse = await innertube.getAttestationChallenge(
       'ENGAGEMENT_TYPE_UNBOUND'
     );
-    const service = (this.#service = await spawnInnertubeSupportService(
+    const service = (this.#service = await spawnInnertubeSupportService({
+      jsRuntime: params?.jsRuntime,
       challengeResponse,
-      {
+      callbacks: {
         onStdOut: (data) => {
           this.#logger.info(`Innertube support service: ${data.toString()}`);
         },
@@ -80,7 +82,7 @@ export class InnertubeWrapper {
           this.#service = null;
         }
       }
-    ));
+    }));
     if (service.status === 'started') {
       this.#logger.info(
         `Innertube support service running at http://${service.server.address}:${service.server.port}`

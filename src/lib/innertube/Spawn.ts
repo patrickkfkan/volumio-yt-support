@@ -23,16 +23,32 @@ const env = {
   PATH: process.env.PATH
 };
 
-export function spawnInnertubeSupportService(
-  challengeResponse: IGetChallengeResponse,
-  callbacks: SpawnedInnertubeSupportServiceCallbacks
-) {
+export function spawnInnertubeSupportService(params: {
+  jsRuntime?: 'node' | 'deno';
+  challengeResponse: IGetChallengeResponse;
+  callbacks: SpawnedInnertubeSupportServiceCallbacks;
+}) {
+  const { challengeResponse, callbacks } = params;
+  let runtime = params.jsRuntime;
   return new Promise<SpawnedInnertubeSupportService>((resolve, reject) => {
     const { onStdOut, onStdErr, onStop } = callbacks;
     let proc;
-    let runtime: 'node' | 'deno';
     const denoStatus = isDenoInstalled();
-    if (denoStatus.installed) {
+    if (
+      (runtime === undefined || runtime === 'deno') &&
+      !denoStatus.installed
+    ) {
+      onStdOut(
+        `Deno not installed or otherwise failed to start: ${denoStatus.error.message}`
+      );
+      if (runtime === 'deno') {
+        throw Error('JS runtime "Deno" not found');
+      }
+    }
+    if (runtime === undefined) {
+      runtime = denoStatus.installed ? 'deno' : 'node';
+    }
+    if (runtime === 'deno' && denoStatus.installed) {
       onStdOut(`Start service with Deno: ${denoStatus.version}`);
       runtime = 'deno';
       proc = spawn(
@@ -55,9 +71,6 @@ export function spawnInnertubeSupportService(
         }
       );
     } else {
-      onStdOut(
-        `Deno not installed or otherwise failed to start: ${denoStatus.error.message}`
-      );
       onStdOut('Start service with Node');
       runtime = 'node';
       proc = spawn(
