@@ -28,6 +28,13 @@ export interface Locale {
   language?: string;
 }
 
+export interface InnertubeWrapperConfig {
+  jsRuntime?: 'node' | 'deno';
+  account?: AccountConfig;
+  locale?: Locale;
+  logger?: Logger;
+}
+
 const PLAYER_ID = 'a944b11f';
 
 export class InnertubeWrapper {
@@ -41,21 +48,17 @@ export class InnertubeWrapper {
   #disposed = false;
   protected innertube: Innertube | null = null;
 
-  static async create(params?: {
-    jsRuntime?: 'node' | 'deno';
-    account?: AccountConfig;
-    locale?: Locale;
-    logger?: Logger;
-  }) {
+  static async create(config?: InnertubeWrapperConfig) {
     const instance = new InnertubeWrapper();
-    instance.#account = params?.account;
-    instance.#locale = params?.locale || {};
-    instance.#logger = params?.logger || new DefaultLogger();
-    await instance.#init(params);
+    await instance.#init(config);
     return instance;
   }
 
-  async #init(params?: { jsRuntime?: 'node' | 'deno' }) {
+  async #init(config?: InnertubeWrapperConfig) {
+    this.#account = config?.account;
+    this.#locale = config?.locale || {};
+    this.#logger = config?.logger || new DefaultLogger();
+
     // 1. Create Innertube instance
     const innertube = (this.innertube = await Innertube.create({
       cookie: this.#account?.cookie,
@@ -68,7 +71,7 @@ export class InnertubeWrapper {
       'ENGAGEMENT_TYPE_UNBOUND'
     );
     const service = (this.#service = await spawnInnertubeSupportService({
-      jsRuntime: params?.jsRuntime,
+      jsRuntime: config?.jsRuntime,
       challengeResponse,
       callbacks: {
         onStdOut: (data) => {
