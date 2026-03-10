@@ -59,6 +59,14 @@ To obtain PO tokens and decipher stream URLs, Innertube needs to execute code ob
 
 ## Changelog
 
+2.0.0
+- Fix minter giving invalid PO tokens
+- Add `jsRuntime` option - mainly for testing purposes
+
+***Breaking change***
+
+`Innertube` instances no longer come pre-bound with a session PO Token. You must now manually fetch the token using `Wrapper#getSessionPoToken()` and provide it during request execution.
+
 1.1.0
 - Add `AutoplayManager` (migrated from YouTube2 / YouTube Music plugins)
 - Some cleanup and refactoring
