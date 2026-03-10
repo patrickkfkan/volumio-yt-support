@@ -33,8 +33,8 @@
 	},
 	"dependencies": {
 		"bgutils-js": "^3.2.0",
-		"canvas": "^3.2.1",
 		"express": "^5.1.0",
+		"happy-dom": "^18.0.1",
 		"jsdom": "^26.1.0",
 		"tree-kill": "^1.2.2",
 		"volumio-youtubei.js": "github:patrickkfkan/Volumio-YouTube.js#v1.6.0"
