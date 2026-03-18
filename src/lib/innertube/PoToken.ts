@@ -1,9 +1,9 @@
 import { BG, buildURL, GOOG_API_KEY, type WebPoSignalOutput } from 'bgutils-js';
 import { type WebPoMinter } from 'bgutils-js/dist/core';
 import { JSDOM } from 'jsdom';
-import { Window } from 'happy-dom';
 import { USER_AGENT } from './Constants';
 import { type IGetChallengeResponse } from 'volumio-youtubei.js';
+import { loadEsm } from 'load-esm';
 
 export interface PoTokenData {
   poToken: string;
@@ -49,6 +49,7 @@ export async function createPoTokenMinter(params: {
     }
   );
   // Create a Happy DOM window just to access its canvas mock
+  const { Window } = await loadEsm('happy-dom');
   const happyWindow = new Window();
   const happyCanvasProto = Object.getPrototypeOf(
     happyWindow.document.createElement('canvas')
