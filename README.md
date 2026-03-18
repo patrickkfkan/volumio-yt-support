@@ -59,6 +59,9 @@ To obtain PO tokens and decipher stream URLs, Innertube needs to execute code ob
 
 ## Changelog
 
+2.1.1
+- Fix import error
+
 2.1.0
 - Update [Volumio-YouTube.js](https://github.com/patrickkfkan/Volumio-YouTube.js) v1.7.0 (based on [YouTube.js](https://github.com/LuanRT/YouTube.js) v17.0.1) which, among other things, fixes n/sig decipher function extraction.
 
