@@ -1,6 +1,6 @@
 {
 	"name": "volumio-yt-support",
-	"version": "2.0.0",
+	"version": "2.1.0",
 	"description": "Supporting module for YouTube plugins on Volumio",
 	"type": "commonjs",
 	"main": "./dist/index.js",
@@ -34,9 +34,9 @@
 	"dependencies": {
 		"bgutils-js": "^3.2.0",
 		"express": "^5.1.0",
-		"happy-dom": "^18.0.1",
+		"happy-dom": "^20.8.4",
 		"jsdom": "^26.1.0",
 		"tree-kill": "^1.2.2",
-		"volumio-youtubei.js": "github:patrickkfkan/Volumio-YouTube.js#v1.6.0"
+		"volumio-youtubei.js": "github:patrickkfkan/Volumio-YouTube.js#v1.7.0"
 	}
 }

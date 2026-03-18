@@ -29,7 +29,7 @@ function evalFnImpl(...args: Parameters<typeof Platform.shim.eval>) {
   const code = `${data.output}\nreturn { ${properties.join(', ')} }`;
 
   // eslint-disable-next-line  @typescript-eslint/no-implied-eval
-  return Function(code)();
+  return Function(data.output)();
 }
 
 export class InnertubeSupportService {

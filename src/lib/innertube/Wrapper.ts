@@ -35,7 +35,10 @@ export interface InnertubeWrapperConfig {
   logger?: Logger;
 }
 
-const PLAYER_ID = 'a944b11f';
+// Override player_id in Innertube initialization. Useful
+// when YT makes breaking changes and we temporary fix it by reverting
+// to a player_id known to be working previously.
+const PLAYER_ID = undefined;
 
 export class InnertubeWrapper {
   #account?: AccountConfig = undefined;

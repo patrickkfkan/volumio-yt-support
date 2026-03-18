@@ -37,6 +37,7 @@ export class InnertubeSupportServer {
     if (!this.#startPromise) {
       this.#startPromise = new Promise((resolve, reject) => {
         const app = express();
+        app.use(express.json({ limit: '50mb' })); 
         const server = app.listen(0, '127.0.0.1', (err) => {
           if (err) {
             this.#server = null;
