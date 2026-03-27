@@ -59,6 +59,10 @@ To obtain PO tokens and decipher stream URLs, Innertube needs to execute code ob
 
 ## Changelog
 
+2.1.2
+- Fix channel handle not applied in session context.
+- Remove duplicate express middleware.
+
 2.1.1
 - Fix import error
 
