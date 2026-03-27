@@ -77,7 +77,6 @@ export class InnertubeSupportServer {
   }
 
   #setRoutes(app: express.Express) {
-    app.use(express.json());
     app.get('/pot', async (req, res) => {
       const identifier = req.query.identifier;
       if (!identifier) {
