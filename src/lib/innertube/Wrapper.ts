@@ -101,6 +101,10 @@ export class InnertubeWrapper {
     // 3. Generate session PO token
     this.#sessionIdentifer = await this.#getSessionIdentifier(innertube);
     await this.getSessionPoToken();
+
+    if (this.#sessionIdentifer?.pageId) {
+      this.innertube.session.context.user.onBehalfOfUser = this.#sessionIdentifer.pageId;
+    }
   }
 
   getSessionPoToken() {
