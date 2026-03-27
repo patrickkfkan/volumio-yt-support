@@ -103,7 +103,8 @@ export class InnertubeWrapper {
     await this.getSessionPoToken();
 
     if (this.#sessionIdentifer?.pageId) {
-      this.innertube.session.context.user.onBehalfOfUser = this.#sessionIdentifer.pageId;
+      this.innertube.session.context.user.onBehalfOfUser =
+        this.#sessionIdentifer.pageId;
     }
   }
 
