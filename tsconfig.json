@@ -13,6 +13,7 @@
     "inlineSources": true,
     "strict": true,
     "strictPropertyInitialization": false,
-    "resolveJsonModule": true
+    "resolveJsonModule": true,
+    "skipLibCheck": true
   }
 }
