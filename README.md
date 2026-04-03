@@ -59,6 +59,9 @@ To obtain PO tokens and decipher stream URLs, Innertube needs to execute code ob
 
 ## Changelog
 
+2.2.0
+- Add external player (VLC / mpv) support.
+
 2.1.2
 - Fix channel handle not applied in session context.
 - Remove duplicate express middleware.
