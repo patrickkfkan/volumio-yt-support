@@ -1,5 +1,8 @@
 import EventEmitter from 'events';
-import { DefaultLogger, type Logger } from '../utils/Logger';
+import { DefaultLogger, getErrorMessage, type Logger } from '../utils/Logger';
+import { type ExternalPlayerManager } from './ExternalPlayerManager';
+import { VLCService } from 'volumio-ext-players';
+import { type UnsetVolatileInfo } from 'volumio-ext-players/dist/common/VolumioStateManager';
 
 export interface QueueItem {
   service: string;
@@ -27,6 +30,7 @@ export interface AutoplayManagerConfig {
     lastPlaybackInfo: LastPlaybackInfo
   ) => Promise<QueueItem[]>;
   getConfigValue: (key: 'autoplay' | 'autoplayClearQueue') => boolean;
+  externalPlayerManager?: ExternalPlayerManager<any>;
   logger?: Logger;
 }
 
@@ -44,37 +48,38 @@ interface MpdState {
  * Autoplay:
  * Two listeners involved:
  * 1. volumioStateListener: captures 'volumioPushState' events.
- *    - On 'play' event of YT track, stores the track being played in `lastPlaybackInfo`
- *      and ensures mpdStateListener is added.
+ *    - On 'play' event of YT track, stores the track being played in `lastPlaybackInfo`.
  *    - If on 'play' event of track povided by a different service, clear `lastPlaybackInfo` and
- *      ensure mpdStateListener is removed,
- * 2. mpdStateListener: captures MPD's system-player event.
- *    - On 'stop' event, check if the track that stopped playing (`lastPlaybackInfo`) is last item
- *      in queue. If so, fetch items for autoplay.
- *    - If `lastPlaybackInfo` is null, that means the track that stopped playing is not provided by
- *      the plugin. Nothing is to be done in this case.
+ *      ensure playerStateListener is removed,
+ * 2. playerStateListener: captures events emitted by the active player:
+ *    - MPD: 'system-player' events with 'stop' status;
+ *    - External player: 'unsetVolatile' event.
+ *    - On capturing the relevant event, check if `lastPlaybackInfo` is the last item in the queue.
+ *      If so, fetch items for autoplay.
+ *    - If `lastPlaybackInfo` is null, that means the last played track is not provided by
+ *      the service. Nothing is to be done in this case.
  *
  * In theory, volumioStateListener can be used to listen for 'stop' events as well, so
- * mpdStateListener is not needed. In practice, it is difficult to process the events it emits:
+ * playerStateListener is not needed. In practice, it is difficult to process the events it emits:
  * - multiple events with the same payload are emitted for no reason;
  * - when moving to the next track in queue, a 'stop' event is emitted for the next track
  *   before the 'play' event.
  *
  * It is simpler and more predictable to just use volumioStateListener to capture the currently-played
- * track, and mpdStateListener to capture moment when playback stops.
+ * track, and playerStateListener to capture the relevant player events.
  */
 
 export class AutoplayManager extends EventEmitter {
   #config: AutoplayManagerConfig;
   #logger: Logger;
   #volumioStateListener: ((state: any) => void) | null;
-  #mpdStateListener: (() => void) | null;
+  #removePlayerStateListenerCb: (() => void) | null;
   #lastPlaybackInfo: LastPlaybackInfo | null;
 
   constructor(config: AutoplayManagerConfig) {
     super();
     this.#config = config;
-    this.#mpdStateListener = null;
+    this.#removePlayerStateListenerCb = null;
     this.#volumioStateListener = null;
     this.#lastPlaybackInfo = null;
     this.#logger = config.logger || new DefaultLogger();
@@ -86,7 +91,7 @@ export class AutoplayManager extends EventEmitter {
   }
 
   disable() {
-    this.#removeMpdStateListener();
+    this.#removePlayerStateListener();
     this.#removeVolumioStateListener();
     this.#logger.info('(AutoplayManager) Disabled');
   }
@@ -98,14 +103,14 @@ export class AutoplayManager extends EventEmitter {
           if (state.service === this.#config.serviceName) {
             this.#lastPlaybackInfo = {
               track: state,
-              position: state.position
+              position: state.position || this.#config.stateMachine.currentPosition
             };
             // Volumio state indicates playback of YT track.
-            // Ensure we listen for changes in MPD state
-            this.#addMpdStateListener();
+            // Ensure we listen for the relevant player events.
+            this.#addPlayerStateListener();
           } else {
             // Different service - autoplay doesn't apply
-            this.#removeMpdStateListener();
+            this.#removePlayerStateListener();
             this.#lastPlaybackInfo = null;
             return;
           }
@@ -135,33 +140,72 @@ export class AutoplayManager extends EventEmitter {
     }
   }
 
-  #addMpdStateListener() {
-    if (!this.#mpdStateListener) {
-      this.#mpdStateListener = () => {
-        this.#config.mpdPlugin.getState().then((state: MpdState) => {
-          if (state.status === 'stop') {
-            this.#logger.info(`(AutoplayManager) MPD 'stop' event received`);
-            void this.#handleAutoplay();
-            this.#removeMpdStateListener();
+  #addPlayerStateListener() {
+    if (this.#removePlayerStateListenerCb) {
+      return;
+    }
+    const externalPlayerManager = this.#config.externalPlayerManager;
+    if (!externalPlayerManager) {
+      return this.#addMpdStateListener();
+    }
+    const player = externalPlayerManager.getActive();
+    if (player) {
+      const playerName = player instanceof VLCService ? 'VLC' : 'MPV';
+      const unsetVolatileListener = (info: UnsetVolatileInfo) => {
+        if (info.stopCalled && !info.nextCalled) {
+          return;
+        }
+        void (async () => {
+          try {
+            await this.#handleAutoplay();
           }
-        });
+          catch (error) {
+            this.#logger.error(getErrorMessage('(AutoplayManager) Error occurred handling autoplay:', error));
+          }
+        })();
+        this.#removePlayerStateListener();
       };
-      this.#config.mpdPlugin.clientMpd.on(
-        'system-player',
-        this.#mpdStateListener
-      );
-      this.#logger.info(`(AutoplayManager) Added mpdStateListener`);
+      player.once('unsetVolatile', unsetVolatileListener);
+      this.#logger.info(`(AutoplayManager) Added state listener to ${playerName} player`);
+      this.#removePlayerStateListenerCb = () => {
+        player.off('unsetVolatile', unsetVolatileListener);
+        this.#removePlayerStateListenerCb = null;
+        this.#logger.info(`(AutoplayManager) Removed state listener from ${playerName} player`);
+      };
+    }
+    else {
+      this.#addMpdStateListener();
     }
   }
 
-  #removeMpdStateListener() {
-    if (this.#mpdStateListener) {
+  #addMpdStateListener() {
+    const listener = () => {
+      this.#config.mpdPlugin.getState().then((state: MpdState) => {
+        if (state.status === 'stop') {
+          this.#logger.info(`(AutoplayManager) MPD 'stop' event received`);
+          void this.#handleAutoplay();
+          this.#removePlayerStateListener();
+        }
+      });
+    };
+    this.#config.mpdPlugin.clientMpd.on(
+      'system-player',
+      listener
+    );
+    this.#logger.info(`(AutoplayManager) Added mpdStateListener`);
+    this.#removePlayerStateListenerCb = () => {
       this.#config.mpdPlugin.clientMpd.removeListener(
         'system-player',
-        this.#mpdStateListener
+        listener
       );
-      this.#mpdStateListener = null;
+      this.#removePlayerStateListenerCb = null;
       this.#logger.info('(AutoplayManager) Removed mpdStateListener');
+    };
+  }
+
+  #removePlayerStateListener() {
+    if (this.#removePlayerStateListenerCb) {
+      this.#removePlayerStateListenerCb();
     }
   }
 
