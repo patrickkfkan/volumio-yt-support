@@ -2,10 +2,10 @@ import { MPVService, VLCService } from 'volumio-ext-players';
 import { getErrorMessage, type Logger } from '../utils/Logger';
 
 export type I18nKey<P extends string> =
-  `${P}_STARTING_PLAYER` |
-  `${P}_ERR_PLAYER_START` |
-  `${P}_ERR_PLAYER_QUIT` |
-  `${P}_PLAYER_CLOSED_UNEXPECTEDLY`;
+  | `${P}_STARTING_PLAYER`
+  | `${P}_ERR_PLAYER_START`
+  | `${P}_ERR_PLAYER_QUIT`
+  | `${P}_PLAYER_CLOSED_UNEXPECTEDLY`;
 
 export interface ExternalPlayerManagerConfig<P extends string> {
   serviceName: string;
@@ -16,7 +16,7 @@ export interface ExternalPlayerManagerConfig<P extends string> {
   i18n: {
     prefix: P;
     get: (key: I18nKey<P>, ...args: string[]) => string;
-  }
+  };
   toast: (type: 'info' | 'warning' | 'error', message: string) => void;
 }
 
@@ -25,7 +25,6 @@ export type ExternalPlayer = 'vlc' | 'mpv';
 type PlayerMap = Record<ExternalPlayer, MPVService | VLCService | null>;
 
 export class ExternalPlayerManager<P extends string> {
-
   #serviceName: string;
   #logger: Logger;
   #toast: ExternalPlayerManagerConfig<P>['toast'];
@@ -66,22 +65,36 @@ export class ExternalPlayerManager<P extends string> {
       const p = await startPromise;
       p.once('close', (code) => {
         if (code && code !== 0) {
-          this.#toast('warning', this.#getI18n(`${this.#i18nPrefix}_PLAYER_CLOSED_UNEXPECTEDLY`, playerName))
+          this.#toast(
+            'warning',
+            this.#getI18n(
+              `${this.#i18nPrefix}_PLAYER_CLOSED_UNEXPECTEDLY`,
+              playerName
+            )
+          );
         }
         this.#logger.info(`[ytmusic] ${player} process closed`);
         this.#players[player] = null;
       });
       this.#players[player] = p;
       return p;
-    }
-    catch (error) {
-      this.#toast('error', getErrorMessage(this.#getI18n(`${this.#i18nPrefix}_ERR_PLAYER_START`, playerName), error));
+    } catch (error) {
+      this.#toast(
+        'error',
+        getErrorMessage(
+          this.#getI18n(`${this.#i18nPrefix}_ERR_PLAYER_START`, playerName),
+          error
+        )
+      );
       return null;
     }
   }
 
   async #startMpv() {
-    this.#toast('info', this.#getI18n(`${this.#i18nPrefix}_STARTING_PLAYER`, 'mpv'));
+    this.#toast(
+      'info',
+      this.#getI18n(`${this.#i18nPrefix}_STARTING_PLAYER`, 'mpv')
+    );
     try {
       const mpv = new MPVService({
         serviceName: this.#serviceName,
@@ -94,14 +107,22 @@ export class ExternalPlayerManager<P extends string> {
       });
       await mpv.start();
       return mpv;
-    }
-    catch (error) {
-      throw Error(getErrorMessage(this.#getI18n(`${this.#i18nPrefix}_ERR_PLAYER_START`, 'mpv'), error));
+    } catch (error) {
+      throw Error(
+        getErrorMessage(
+          this.#getI18n(`${this.#i18nPrefix}_ERR_PLAYER_START`, 'mpv'),
+          error
+        ),
+        { cause: error }
+      );
     }
   }
 
   async #startVLC() {
-    this.#toast('info', this.#getI18n(`${this.#i18nPrefix}_STARTING_PLAYER`, 'VLC'));
+    this.#toast(
+      'info',
+      this.#getI18n(`${this.#i18nPrefix}_STARTING_PLAYER`, 'VLC')
+    );
     try {
       const vlc = new VLCService({
         serviceName: this.#serviceName,
@@ -114,12 +135,16 @@ export class ExternalPlayerManager<P extends string> {
       });
       await vlc.start();
       return vlc;
-    }
-    catch (error) {
-      throw Error(getErrorMessage(this.#getI18n(`${this.#i18nPrefix}_ERR_PLAYER_START`, 'VLC'), error));
+    } catch (error) {
+      throw Error(
+        getErrorMessage(
+          this.#getI18n(`${this.#i18nPrefix}_ERR_PLAYER_START`, 'VLC'),
+          error
+        ),
+        { cause: error }
+      );
     }
   }
-
 
   stop(player: ExternalPlayer) {
     const p = this.#players[player];
@@ -137,18 +162,27 @@ export class ExternalPlayerManager<P extends string> {
     if (p) {
       try {
         await p.quit();
-      }
-      catch (error) {
-        this.#toast('error', this.#getI18n(`${this.#i18nPrefix}_ERR_PLAYER_QUIT`, this.#getPlayerName(player), getErrorMessage('', error, false)));
-      }
-      finally {
+      } catch (error) {
+        this.#toast(
+          'error',
+          this.#getI18n(
+            `${this.#i18nPrefix}_ERR_PLAYER_QUIT`,
+            this.#getPlayerName(player),
+            getErrorMessage('', error, false)
+          )
+        );
+      } finally {
         this.#players[player] = null;
       }
     }
   }
 
   quitAll() {
-    return Promise.all(Object.keys(this.#players).map((player) => this.quit(player as ExternalPlayer)));
+    return Promise.all(
+      Object.keys(this.#players).map((player) =>
+        this.quit(player as ExternalPlayer)
+      )
+    );
   }
 
   #getPlayerName(player: ExternalPlayer) {

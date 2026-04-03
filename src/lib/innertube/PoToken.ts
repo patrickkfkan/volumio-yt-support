@@ -29,7 +29,8 @@ export async function createPoTokenMinter(params: {
   } catch (error: unknown) {
     const errMsg = error instanceof Error ? error : Error(String(error));
     throw Error(
-      `Error parsing challenge response "${params.challengeResponse}": ${errMsg}`
+      `Error parsing challenge response "${params.challengeResponse}": ${errMsg}`,
+      { cause: error }
     );
   }
 
@@ -112,7 +113,7 @@ export async function createPoTokenMinter(params: {
   const response = (await integrityTokenResponse.json()) as [
     string,
     number,
-    number,
+    number | undefined,
     string
   ];
 
@@ -133,7 +134,7 @@ export async function createPoTokenMinter(params: {
   return {
     minter: integrityTokenBasedMinter,
     ttl: estimatedTtlSecs,
-    refreshThreshold: mintRefreshThreshold,
+    refreshThreshold: mintRefreshThreshold || 100,
     created: Date.now()
   };
 }

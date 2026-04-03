@@ -121,7 +121,7 @@ export class InnertubeWrapper {
       this.#sessionPoToken = this.#generateSessionPoToken();
       const pot = await this.#sessionPoToken;
       if (pot) {
-        const { ttl, refreshThreshold = 100 } = pot;
+        const { ttl, refreshThreshold } = pot;
         if (ttl) {
           let timeout = ttl - refreshThreshold;
           if (timeout < 0) {

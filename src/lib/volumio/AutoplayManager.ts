@@ -103,7 +103,8 @@ export class AutoplayManager extends EventEmitter {
           if (state.service === this.#config.serviceName) {
             this.#lastPlaybackInfo = {
               track: state,
-              position: state.position || this.#config.stateMachine.currentPosition
+              position:
+                state.position || this.#config.stateMachine.currentPosition
             };
             // Volumio state indicates playback of YT track.
             // Ensure we listen for the relevant player events.
@@ -158,22 +159,29 @@ export class AutoplayManager extends EventEmitter {
         void (async () => {
           try {
             await this.#handleAutoplay();
-          }
-          catch (error) {
-            this.#logger.error(getErrorMessage('(AutoplayManager) Error occurred handling autoplay:', error));
+          } catch (error) {
+            this.#logger.error(
+              getErrorMessage(
+                '(AutoplayManager) Error occurred handling autoplay:',
+                error
+              )
+            );
           }
         })();
         this.#removePlayerStateListener();
       };
       player.once('unsetVolatile', unsetVolatileListener);
-      this.#logger.info(`(AutoplayManager) Added state listener to ${playerName} player`);
+      this.#logger.info(
+        `(AutoplayManager) Added state listener to ${playerName} player`
+      );
       this.#removePlayerStateListenerCb = () => {
         player.off('unsetVolatile', unsetVolatileListener);
         this.#removePlayerStateListenerCb = null;
-        this.#logger.info(`(AutoplayManager) Removed state listener from ${playerName} player`);
+        this.#logger.info(
+          `(AutoplayManager) Removed state listener from ${playerName} player`
+        );
       };
-    }
-    else {
+    } else {
       this.#addMpdStateListener();
     }
   }
@@ -188,10 +196,7 @@ export class AutoplayManager extends EventEmitter {
         }
       });
     };
-    this.#config.mpdPlugin.clientMpd.on(
-      'system-player',
-      listener
-    );
+    this.#config.mpdPlugin.clientMpd.on('system-player', listener);
     this.#logger.info(`(AutoplayManager) Added mpdStateListener`);
     this.#removePlayerStateListenerCb = () => {
       this.#config.mpdPlugin.clientMpd.removeListener(

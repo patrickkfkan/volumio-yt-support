@@ -57,7 +57,7 @@ export class InnertubeSupportService {
   async #createMinter(params: { challengeResponse: string }) {
     this.#clearRefreshMinterTimer();
     const minterResult = await createPoTokenMinter(params);
-    const { ttl, refreshThreshold = 100 } = minterResult;
+    const { ttl, refreshThreshold } = minterResult;
 
     // Refresh minter earlier than what refreshThreshold suggests,
     // so requests coming in will use the new minter.
